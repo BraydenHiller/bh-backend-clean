@@ -2,26 +2,22 @@ const express = require('express');
 const cors = require('cors');
 
 const app = express();
-const PORT = process.env.PORT; // ✅ Required by Render
+const PORT = process.env.PORT;
 
 app.use(cors());
 app.use(express.json());
 
-// 🔧 In-memory store
 let clients = [];
 let selections = [];
 
-// Root route
 app.get('/', (req, res) => {
   res.send('📸 BH Backend API running (memory mode)');
 });
 
-// GET all clients
 app.get('/clients', (req, res) => {
   res.json(clients);
 });
 
-// POST create client
 app.post('/clients', (req, res) => {
   const { id, name, password } = req.body;
   if (!id || !name || !password) {
@@ -37,10 +33,8 @@ app.post('/clients', (req, res) => {
   res.json(newClient);
 });
 
-// POST upload images
 app.post('/upload', (req, res) => {
   const { id, images } = req.body;
-
   const client = clients.find(c => c.id === id);
   if (!client) {
     return res.status(404).json({ error: 'Client not found' });
@@ -54,20 +48,22 @@ app.post('/upload', (req, res) => {
   res.json({ success: true, updated: client.images });
 });
 
-// POST save selections
-app.post('/select', (req, res) => {
+// ✅ FIXED: Renamed from `/select` to `/selections`
+app.post('/selections', (req, res) => {
   const { id, selected } = req.body;
+  if (!id || !Array.isArray(selected)) {
+    return res.status(400).json({ error: 'Invalid selection format' });
+  }
+
   selections = selections.filter(s => s.id !== id);
   selections.push({ id, selected });
   res.json({ success: true });
 });
 
-// GET all selections
 app.get('/selections', (req, res) => {
   res.json(selections);
 });
 
-// POST update image list
 app.post('/update-images', (req, res) => {
   const { id, images } = req.body;
   const client = clients.find(c => c.id === id);
@@ -77,7 +73,6 @@ app.post('/update-images', (req, res) => {
   res.json({ success: true });
 });
 
-// DELETE client
 app.delete('/clients/:id', (req, res) => {
   const { id } = req.params;
   const clientIndex = clients.findIndex(c => c.id === id);
@@ -91,5 +86,4 @@ app.delete('/clients/:id', (req, res) => {
   res.json({ success: true });
 });
 
-// START SERVER
 app.listen(PORT, () => console.log(`✅ Memory-mode server running on port ${PORT}`));
