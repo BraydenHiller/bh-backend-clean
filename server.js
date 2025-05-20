@@ -77,3 +77,4 @@ app.post('/update-images', (req, res) => {
   client.images = images;
   res.json({ success: true });
 });
+app.listen(PORT, () => console.log(`✅ Memory-mode server running on port ${PORT}`));
