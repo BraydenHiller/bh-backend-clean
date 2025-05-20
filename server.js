@@ -20,7 +20,12 @@ function writeJSON(file, data) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
 }
 
-// GET all clients
+// ✅ Root route (optional)
+app.get('/', (req, res) => {
+  res.send('📸 BH Backend API is running!');
+});
+
+// GET clients
 app.get('/clients', (req, res) => {
   res.json(readJSON(clientsPath));
 });
@@ -28,15 +33,22 @@ app.get('/clients', (req, res) => {
 // POST create client
 app.post('/clients', (req, res) => {
   const { id, name, password } = req.body;
+  if (!id || !name || !password) {
+    return res.status(400).json({ error: 'Missing fields' });
+  }
+
   const clients = readJSON(clientsPath);
-  if (clients.some(c => c.id === id)) return res.status(400).json({ error: 'Client ID exists' });
+  if (clients.some(c => c.id === id)) {
+    return res.status(400).json({ error: 'Client ID already exists' });
+  }
+
   const newClient = { id, name, password, images: [] };
   clients.push(newClient);
   writeJSON(clientsPath, clients);
   res.json(newClient);
 });
 
-// POST upload images (simulated)
+// POST upload images (simulate)
 app.post('/upload', (req, res) => {
   const { id, images } = req.body;
   const clients = readJSON(clientsPath);
@@ -63,4 +75,4 @@ app.get('/selections', (req, res) => {
   res.json(readJSON(selectionsPath));
 });
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
