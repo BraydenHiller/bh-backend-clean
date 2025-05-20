@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 
 const app = express();
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT; // ✅ Required by Render
 
 app.use(cors());
 app.use(express.json());
@@ -37,7 +37,7 @@ app.post('/clients', (req, res) => {
   res.json(newClient);
 });
 
-// POST upload images (simulated)
+// POST upload images
 app.post('/upload', (req, res) => {
   const { id, images } = req.body;
 
@@ -54,7 +54,6 @@ app.post('/upload', (req, res) => {
   res.json({ success: true, updated: client.images });
 });
 
-
 // POST save selections
 app.post('/select', (req, res) => {
   const { id, selected } = req.body;
@@ -68,7 +67,7 @@ app.get('/selections', (req, res) => {
   res.json(selections);
 });
 
-app.listen(PORT, () => console.log(`✅ Memory-mode server running on port ${PORT}`));
+// POST update image list
 app.post('/update-images', (req, res) => {
   const { id, images } = req.body;
   const client = clients.find(c => c.id === id);
@@ -77,4 +76,20 @@ app.post('/update-images', (req, res) => {
   client.images = images;
   res.json({ success: true });
 });
+
+// DELETE client
+app.delete('/clients/:id', (req, res) => {
+  const { id } = req.params;
+  const clientIndex = clients.findIndex(c => c.id === id);
+  if (clientIndex === -1) {
+    return res.status(404).json({ error: 'Client not found' });
+  }
+
+  clients.splice(clientIndex, 1);
+  selections = selections.filter(s => s.id !== id);
+
+  res.json({ success: true });
+});
+
+// START SERVER
 app.listen(PORT, () => console.log(`✅ Memory-mode server running on port ${PORT}`));
