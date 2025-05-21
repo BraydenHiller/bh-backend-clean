@@ -1,114 +1,135 @@
 const express = require('express');
 const cors = require('cors');
-const fs = require('fs');
-const path = require('path');
+const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
 
+// Supabase keys – already wired up to use env variables
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://hkoymztwxehqaqwoninw.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhrb3ltenR3eGVocWFxd29uaW53Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc3OTA2NTksImV4cCI6MjA2MzM2NjY1OX0.UiyoYe_w5qnjgQwCJy5A5TYzosTtqBGS7ZQmmIjaP_k';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
 app.use(cors());
 app.use(express.json());
 
-const dataDir = path.join(__dirname, 'data');
-const clientsFile = path.join(dataDir, 'clients.json');
-const selectionsFile = path.join(dataDir, 'selections.json');
-
-// Ensure data directory and files exist
-if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
-if (!fs.existsSync(clientsFile)) fs.writeFileSync(clientsFile, '[]');
-if (!fs.existsSync(selectionsFile)) fs.writeFileSync(selectionsFile, '[]');
-
-// Load initial data from disk
-let clients = JSON.parse(fs.readFileSync(clientsFile));
-let selections = JSON.parse(fs.readFileSync(selectionsFile));
-
-// Save helper
-const saveToFile = (filePath, data) => {
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-};
-
-// Routes
-
 app.get('/', (req, res) => {
-  res.send('📸 BH Capture Co backend is running with file persistence');
+  res.send('📸 BH Capture Co backend running with Supabase persistence');
 });
 
-app.get('/clients', (req, res) => {
-  res.json(clients);
+// Get all clients
+app.get('/clients', async (req, res) => {
+  const { data, error } = await supabase.from('clients').select('*');
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
 });
 
-app.post('/clients', (req, res) => {
+// Create new client
+app.post('/clients', async (req, res) => {
   const { id, name, password } = req.body;
   if (!id || !name || !password) {
     return res.status(400).json({ error: 'Missing fields' });
   }
 
-  if (clients.some(c => c.id === id)) {
-    return res.status(400).json({ error: 'Client ID already exists' });
-  }
+  const { data: existing, error: existsError } = await supabase
+    .from('clients')
+    .select('id')
+    .eq('id', id);
 
-  const newClient = { id, name, password, images: [] };
-  clients.push(newClient);
-  saveToFile(clientsFile, clients);
-  res.json(newClient);
+  if (existsError) return res.status(500).json({ error: existsError.message });
+  if (existing.length > 0) return res.status(400).json({ error: 'Client ID already exists' });
+
+  const { error } = await supabase
+    .from('clients')
+    .insert([{ id, name, password, images: [] }]);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
 });
 
-app.post('/upload', (req, res) => {
+// Upload images to client
+app.post('/upload', async (req, res) => {
   const { id, images } = req.body;
-  const client = clients.find(c => c.id === id);
-  if (!client) {
-    return res.status(404).json({ error: 'Client not found' });
-  }
 
-  if (!Array.isArray(client.images)) {
-    client.images = [];
-  }
+  const { data, error: fetchErr } = await supabase
+    .from('clients')
+    .select('images')
+    .eq('id', id)
+    .single();
 
-  client.images.push(...images);
-  saveToFile(clientsFile, clients);
-  res.json({ success: true, updated: client.images });
+  if (fetchErr || !data) return res.status(404).json({ error: 'Client not found' });
+
+  const newImages = [...(data.images || []), ...images];
+
+  const { error } = await supabase
+    .from('clients')
+    .update({ images: newImages })
+    .eq('id', id);
+
+  if (error) return res.status(500).json({ error: error.message });
+
+  res.json({ success: true, updated: newImages });
 });
 
-app.post('/selections', (req, res) => {
+// Get all selections
+app.get('/selections', async (req, res) => {
+  const { data, error } = await supabase.from('selections').select('*');
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+// Save selections for a client
+app.post('/selections', async (req, res) => {
   const { id, selected } = req.body;
-  if (!id || !Array.isArray(selected)) {
-    return res.status(400).json({ error: 'Invalid selection format' });
-  }
 
-  selections = selections.filter(s => s.id !== id);
-  selections.push({ id, selected });
-  saveToFile(selectionsFile, selections);
+  await supabase.from('selections').delete().eq('id', id);
+
+  const { error } = await supabase
+    .from('selections')
+    .insert([{ id, selected }]);
+
+  if (error) return res.status(500).json({ error: error.message });
+
   res.json({ success: true });
 });
 
-app.get('/selections', (req, res) => {
-  res.json(selections);
-});
-
-app.post('/update-images', (req, res) => {
+// Replace images for a client
+app.post('/update-images', async (req, res) => {
   const { id, images } = req.body;
-  const client = clients.find(c => c.id === id);
-  if (!client) return res.status(404).json({ error: 'Client not found' });
 
-  client.images = images;
-  saveToFile(clientsFile, clients);
+  const { error } = await supabase
+    .from('clients')
+    .update({ images })
+    .eq('id', id);
+
+  if (error) return res.status(500).json({ error: error.message });
+
   res.json({ success: true });
 });
 
-app.delete('/clients/:id', (req, res) => {
+// Delete a client
+app.delete('/clients/:id', async (req, res) => {
   const { id } = req.params;
-  const clientIndex = clients.findIndex(c => c.id === id);
-  if (clientIndex === -1) {
-    return res.status(404).json({ error: 'Client not found' });
-  }
 
-  clients.splice(clientIndex, 1);
-  selections = selections.filter(s => s.id !== id);
-  saveToFile(clientsFile, clients);
-  saveToFile(selectionsFile, selections);
+  const { error: clientErr } = await supabase
+    .from('clients')
+    .delete()
+    .eq('id', id);
+
+  const { error: selErr } = await supabase
+    .from('selections')
+    .delete()
+    .eq('id', id);
+
+  if (clientErr || selErr) {
+    return res.status(500).json({ error: clientErr?.message || selErr?.message });
+  }
 
   res.json({ success: true });
 });
 
 // Start the server
-app.listen(PORT, () => console.log(`✅ Server running on port ${PORT} with file-based storage`));
+app.listen(PORT, () => {
+  console.log(`✅ Supabase-powered backend running on port ${PORT}`);
+});
