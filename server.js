@@ -1,17 +1,36 @@
 const express = require('express');
 const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 8080;
 
 app.use(cors());
 app.use(express.json());
 
-let clients = [];
-let selections = [];
+const dataDir = path.join(__dirname, 'data');
+const clientsFile = path.join(dataDir, 'clients.json');
+const selectionsFile = path.join(dataDir, 'selections.json');
+
+// Ensure data directory and files exist
+if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
+if (!fs.existsSync(clientsFile)) fs.writeFileSync(clientsFile, '[]');
+if (!fs.existsSync(selectionsFile)) fs.writeFileSync(selectionsFile, '[]');
+
+// Load initial data from disk
+let clients = JSON.parse(fs.readFileSync(clientsFile));
+let selections = JSON.parse(fs.readFileSync(selectionsFile));
+
+// Save helper
+const saveToFile = (filePath, data) => {
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+};
+
+// Routes
 
 app.get('/', (req, res) => {
-  res.send('📸 BH Backend API running (memory mode)');
+  res.send('📸 BH Capture Co backend is running with file persistence');
 });
 
 app.get('/clients', (req, res) => {
@@ -30,6 +49,7 @@ app.post('/clients', (req, res) => {
 
   const newClient = { id, name, password, images: [] };
   clients.push(newClient);
+  saveToFile(clientsFile, clients);
   res.json(newClient);
 });
 
@@ -45,10 +65,10 @@ app.post('/upload', (req, res) => {
   }
 
   client.images.push(...images);
+  saveToFile(clientsFile, clients);
   res.json({ success: true, updated: client.images });
 });
 
-// ✅ FIXED: Renamed from `/select` to `/selections`
 app.post('/selections', (req, res) => {
   const { id, selected } = req.body;
   if (!id || !Array.isArray(selected)) {
@@ -57,6 +77,7 @@ app.post('/selections', (req, res) => {
 
   selections = selections.filter(s => s.id !== id);
   selections.push({ id, selected });
+  saveToFile(selectionsFile, selections);
   res.json({ success: true });
 });
 
@@ -70,6 +91,7 @@ app.post('/update-images', (req, res) => {
   if (!client) return res.status(404).json({ error: 'Client not found' });
 
   client.images = images;
+  saveToFile(clientsFile, clients);
   res.json({ success: true });
 });
 
@@ -82,8 +104,11 @@ app.delete('/clients/:id', (req, res) => {
 
   clients.splice(clientIndex, 1);
   selections = selections.filter(s => s.id !== id);
+  saveToFile(clientsFile, clients);
+  saveToFile(selectionsFile, selections);
 
   res.json({ success: true });
 });
 
-app.listen(PORT, () => console.log(`✅ Memory-mode server running on port ${PORT}`));
+// Start the server
+app.listen(PORT, () => console.log(`✅ Server running on port ${PORT} with file-based storage`));
