@@ -133,3 +133,19 @@ app.delete('/clients/:id', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ Supabase-powered backend running on port ${PORT}`);
 });
+// Showcase table routes
+app.get('/showcase', async (req, res) => {
+  const { data, error } = await supabase.from('showcase').select('*').single();
+  if (error && error.code !== 'PGRST116') return res.status(500).json({ error: error.message });
+  if (!data) return res.json({ elements: [], backgroundColor: '#fff', backgroundImage: null });
+  res.json(data);
+});
+
+app.post('/showcase', async (req, res) => {
+  const { layout } = req.body;
+  const { error: delErr } = await supabase.from('showcase').delete();
+  if (delErr) console.error('Error deleting existing layout:', delErr.message);
+  const { error } = await supabase.from('showcase').insert([{ ...layout }]);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
